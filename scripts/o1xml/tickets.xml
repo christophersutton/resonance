@@ -1,0 +1,1176 @@
+<response>
+<file path="packages/web-client/src/services/ticketService.ts">
+<![CDATA[
+import supabase from "../supabase";
+
+/**
+ * Ticket interface for type checking
+ */
+export interface Ticket {
+  id: string;
+  ticket_type_id: number | null;
+  title: string;
+  description: string | null;
+  status: "NEW" | "OPEN" | "PENDING" | "RESOLVED" | "CLOSED";
+  priority: "LOW" | "NORMAL" | "HIGH" | "URGENT";
+  severity: "NONE" | "MINOR" | "MAJOR" | "CRITICAL" | null;
+  requester_id: string;
+  assigned_agent_id: string | null;
+  client_id: string | null;
+  tags: string[] | null;
+  custom_fields: any;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface Message {
+  id: string;
+  ticket_id: string;
+  author_id: string;
+  content: string;
+  attachments: string[] | null;
+  created_at: string | null;
+}
+
+export interface TicketType {
+  id: number;
+  name: string;
+  description: string | null;
+  workflow_metadata: any;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+/**
+ * Fetch all ticket types (BUG, MAINTENANCE, etc.)
+ */
+export async function getTicketTypes() {
+  const { data, error } = await supabase
+    .from("ticket_types")
+    .select("*")
+    .order("id");
+
+  return { data, error };
+}
+
+/**
+ * Fetch the current user's tickets (based on RLS).
+ */
+export async function getTickets() {
+  const { data, error } = await supabase
+    .from("tickets")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  return { data, error };
+}
+
+/**
+ * Fetch a single ticket by ID.
+ */
+export async function getTicketById(ticketId: string) {
+  const { data, error } = await supabase
+    .from("tickets")
+    .select("*")
+    .eq("id", ticketId)
+    .single();
+
+  return { data, error };
+}
+
+/**
+ * Create a new ticket. The user must have RLS permission (i.e., a logged-in client user).
+ */
+export async function createTicket(params: {
+  ticket_type_id: number;
+  title: string;
+  description: string;
+  priority: string;
+  severity: string;
+}) {
+  const { data, error } = await supabase
+    .from("tickets")
+    .insert({
+      ticket_type_id: params.ticket_type_id,
+      title: params.title,
+      description: params.description,
+      priority: params.priority,
+      severity: params.severity || "NONE",
+      status: "NEW",
+    })
+    .select()
+    .single();
+
+  return { data, error };
+}
+
+/**
+ * Fetch messages for a specific ticket.
+ */
+export async function getMessages(ticketId: string) {
+  const { data, error } = await supabase
+    .from("messages")
+    .select("*")
+    .eq("ticket_id", ticketId)
+    .order("created_at", { ascending: true });
+
+  return { data, error };
+}
+
+/**
+ * Create a new message in a ticket.
+ */
+export async function createMessage(ticketId: string, content: string) {
+  const { data, error } = await supabase
+    .from("messages")
+    .insert({
+      ticket_id: ticketId,
+      content,
+    })
+    .select()
+    .single();
+
+  return { data, error };
+}
+]]>
+</file>
+
+<file path="packages/web-client/src/pages/tickets/TicketsList.tsx">
+<![CDATA[
+import { useEffect, useState } from "react";
+import { getTickets, Ticket } from "../../services/ticketService";
+import { Link } from "react-router-dom";
+import { Loader2 } from "lucide-react";
+
+const TicketsList = () => {
+  const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchTickets = async () => {
+      const { data, error } = await getTickets();
+      if (error) {
+        setError(error.message);
+      } else {
+        setTickets(data || []);
+      }
+      setLoading(false);
+    };
+
+    fetchTickets();
+  }, []);
+
+  if (error) {
+    return (
+      <main className="min-h-screen flex items-center justify-center">
+        <div className="text-red-500 text-center">
+          <p>Error: {error}</p>
+        </div>
+      </main>
+    );
+  }
+
+  if (loading) {
+    return (
+      <main className="min-h-screen flex items-center justify-center">
+        <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+      </main>
+    );
+  }
+
+  return (
+    <main className="max-w-4xl mx-auto p-4">
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-2xl font-bold">My Tickets</h1>
+        <Link
+          to="/tickets/new"
+          className="inline-flex items-center px-4 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700"
+        >
+          Create Ticket
+        </Link>
+      </div>
+
+      {tickets.length === 0 ? (
+        <p>No tickets found.</p>
+      ) : (
+        <ul className="space-y-4">
+          {tickets.map((ticket) => (
+            <li key={ticket.id} className="bg-white rounded shadow p-4">
+              <Link to={`/tickets/${ticket.id}`} className="font-semibold text-blue-600">
+                {ticket.title} ({ticket.status})
+              </Link>
+              <p className="text-sm text-gray-600 mt-1">
+                Priority: {ticket.priority} | Severity: {ticket.severity}
+              </p>
+            </li>
+          ))}
+        </ul>
+      )}
+    </main>
+  );
+};
+
+export default TicketsList;
+]]>
+</file>
+
+<file path="packages/web-client/src/pages/tickets/AddTicket.tsx">
+<![CDATA[
+import { FormEvent, useEffect, useState } from "react";
+import { createTicket, getTicketTypes, TicketType } from "../../services/ticketService";
+import { useNavigate } from "react-router-dom";
+import { Loader2 } from "lucide-react";
+
+const AddTicket = () => {
+  const navigate = useNavigate();
+  const [ticketTypes, setTicketTypes] = useState<TicketType[]>([]);
+  const [formValues, setFormValues] = useState({
+    ticket_type_id: "",
+    title: "",
+    description: "",
+    priority: "NORMAL",
+    severity: "NONE",
+  });
+  const [loading, setLoading] = useState(false);
+  const [typesLoading, setTypesLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      const { data, error } = await getTicketTypes();
+      setTypesLoading(false);
+      if (error) {
+        setError(error.message);
+      } else {
+        setTicketTypes(data || []);
+      }
+    })();
+  }, []);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    setFormValues((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+    setError(null);
+  };
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+
+    const { data, error } = await createTicket({
+      ticket_type_id: Number(formValues.ticket_type_id),
+      title: formValues.title,
+      description: formValues.description,
+      priority: formValues.priority,
+      severity: formValues.severity,
+    });
+
+    if (error) {
+      setError(error.message);
+    } else if (data) {
+      navigate(`/tickets/${data.id}`);
+    }
+    setLoading(false);
+  };
+
+  return (
+    <main className="max-w-2xl mx-auto p-4">
+      <h1 className="text-2xl font-bold mb-4">Create New Ticket</h1>
+
+      {error && (
+        <div className="bg-red-100 text-red-600 p-2 mb-4 rounded">
+          {error}
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit} className="space-y-4 bg-white p-4 rounded shadow">
+        {typesLoading ? (
+          <p className="text-gray-600">Loading ticket types...</p>
+        ) : (
+          <div className="space-y-2">
+            <label htmlFor="ticket_type_id" className="block font-medium">
+              Ticket Type
+            </label>
+            <select
+              id="ticket_type_id"
+              name="ticket_type_id"
+              value={formValues.ticket_type_id}
+              onChange={handleChange}
+              className="border rounded w-full p-2"
+              required
+            >
+              <option value="" disabled>Select a type</option>
+              {ticketTypes.map((type) => (
+                <option key={type.id} value={type.id}>
+                  {type.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        <div className="space-y-2">
+          <label htmlFor="title" className="block font-medium">
+            Title
+          </label>
+          <input
+            type="text"
+            id="title"
+            name="title"
+            className="border rounded w-full p-2"
+            value={formValues.title}
+            onChange={handleChange}
+            required
+          />
+        </div>
+
+        <div className="space-y-2">
+          <label htmlFor="description" className="block font-medium">
+            Description
+          </label>
+          <textarea
+            id="description"
+            name="description"
+            className="border rounded w-full p-2"
+            rows={4}
+            value={formValues.description}
+            onChange={handleChange}
+            required
+          />
+        </div>
+
+        <div className="space-y-2">
+          <label htmlFor="priority" className="block font-medium">
+            Priority
+          </label>
+          <select
+            id="priority"
+            name="priority"
+            value={formValues.priority}
+            onChange={handleChange}
+            className="border rounded w-full p-2"
+          >
+            <option value="LOW">LOW</option>
+            <option value="NORMAL">NORMAL</option>
+            <option value="HIGH">HIGH</option>
+            <option value="URGENT">URGENT</option>
+          </select>
+        </div>
+
+        <div className="space-y-2">
+          <label htmlFor="severity" className="block font-medium">
+            Severity
+          </label>
+          <select
+            id="severity"
+            name="severity"
+            value={formValues.severity}
+            onChange={handleChange}
+            className="border rounded w-full p-2"
+          >
+            <option value="NONE">NONE</option>
+            <option value="MINOR">MINOR</option>
+            <option value="MAJOR">MAJOR</option>
+            <option value="CRITICAL">CRITICAL</option>
+          </select>
+        </div>
+
+        <button
+          type="submit"
+          disabled={loading}
+          className="inline-flex items-center px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700"
+        >
+          {loading && <Loader2 className="mr-2 w-4 h-4 animate-spin" />}
+          Create Ticket
+        </button>
+      </form>
+    </main>
+  );
+};
+
+export default AddTicket;
+]]>
+</file>
+
+<file path="packages/web-client/src/pages/tickets/TicketDetail.tsx">
+<![CDATA[
+import { useEffect, useState } from "react";
+import {
+  getTicketById,
+  getMessages,
+  createMessage,
+  Ticket,
+  Message
+} from "../../services/ticketService";
+import { useParams } from "react-router-dom";
+import { Loader2 } from "lucide-react";
+
+const TicketDetail = () => {
+  const { id } = useParams<{ id: string }>();
+  const [ticket, setTicket] = useState<Ticket | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [msgLoading, setMsgLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [msgError, setMsgError] = useState<string | null>(null);
+  const [newMessage, setNewMessage] = useState("");
+
+  const fetchTicketAndMessages = async (ticketId: string) => {
+    setLoading(true);
+
+    const ticketResult = await getTicketById(ticketId);
+    if (ticketResult.error) {
+      setError(ticketResult.error.message);
+      setLoading(false);
+      return;
+    }
+
+    const messagesResult = await getMessages(ticketId);
+    if (messagesResult.error) {
+      setError(messagesResult.error.message);
+    }
+
+    setTicket(ticketResult.data || null);
+    setMessages(messagesResult.data || []);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    if (id) {
+      fetchTicketAndMessages(id);
+    }
+  }, [id]);
+
+  const handleSendMessage = async () => {
+    if (!id || !newMessage.trim()) return;
+    setMsgLoading(true);
+    setMsgError(null);
+
+    const { data, error } = await createMessage(id, newMessage.trim());
+    setMsgLoading(false);
+
+    if (error) {
+      setMsgError(error.message);
+      return;
+    }
+
+    if (data) {
+      // Refresh messages
+      const refreshed = await getMessages(id);
+      if (refreshed.error) {
+        setMsgError(refreshed.error.message);
+      } else {
+        setMessages(refreshed.data || []);
+        setNewMessage("");
+      }
+    }
+  };
+
+  if (loading) {
+    return (
+      <main className="min-h-screen flex items-center justify-center">
+        <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+      </main>
+    );
+  }
+
+  if (error || !ticket) {
+    return (
+      <main className="min-h-screen flex items-center justify-center">
+        <div className="text-red-500">
+          {error || "Ticket not found."}
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <main className="max-w-3xl mx-auto p-4">
+      <h1 className="text-2xl font-bold mb-2">{ticket.title}</h1>
+      <p className="text-gray-600 mb-4">
+        Status: {ticket.status} | Priority: {ticket.priority} | Severity: {ticket.severity}
+      </p>
+      <div className="bg-white p-4 rounded shadow mb-4">
+        <h2 className="text-lg font-semibold mb-1">Description</h2>
+        <p className="text-gray-700 whitespace-pre-line">{ticket.description}</p>
+      </div>
+
+      <div className="bg-white p-4 rounded shadow">
+        <h2 className="text-lg font-semibold mb-2">Messages</h2>
+        {messages.length === 0 ? (
+          <p className="text-gray-500">No messages yet.</p>
+        ) : (
+          <ul className="space-y-2 mb-4">
+            {messages.map((msg) => (
+              <li key={msg.id} className="bg-gray-50 p-2 rounded">
+                <p className="text-sm text-gray-800">{msg.content}</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  {new Date(msg.created_at ?? "").toLocaleString()}
+                </p>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {msgError && (
+          <p className="text-red-500 mb-2">{msgError}</p>
+        )}
+
+        <div className="flex space-x-2">
+          <input
+            className="border rounded flex-1 p-2"
+            placeholder="Type a message..."
+            value={newMessage}
+            onChange={(e) => setNewMessage(e.target.value)}
+          />
+          <button
+            disabled={msgLoading}
+            onClick={handleSendMessage}
+            className="inline-flex items-center px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700"
+          >
+            {msgLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+            Send
+          </button>
+        </div>
+      </div>
+    </main>
+  );
+};
+
+export default TicketDetail;
+]]>
+</file>
+
+<file path="packages/web-client/src/router/index.tsx">
+<![CDATA[
+import { createBrowserRouter } from "react-router-dom";
+import HomePage from "../pages/HomePage";
+import SignInPage from "../pages/auth/SignInPage";
+import SignUpPage from "../pages/auth/SignUpPage";
+import AuthCallback from "../pages/auth/AuthCallback";
+import ProtectedPage from "../pages/ProtectedPage";
+import NotFoundPage from "../pages/404Page";
+import AuthProtectedRoute from "./AuthProtectedRoute";
+import Providers from "../Providers";
+import { AddClient } from "../pages/AddClient";
+import { ClientPage } from "../pages/ClientPage";
+import App from "../App";
+
+// Ticket pages
+import TicketsList from "../pages/tickets/TicketsList";
+import AddTicket from "../pages/tickets/AddTicket";
+import TicketDetail from "../pages/tickets/TicketDetail";
+
+const router = createBrowserRouter([
+  {
+    path: "/",
+    element: <Providers />,
+    children: [
+      {
+        path: "/",
+        element: <App />,
+        children: [
+          // Public routes
+          {
+            path: "/",
+            element: <HomePage />,
+          },
+          {
+            path: "/auth/sign-in",
+            element: <SignInPage />,
+          },
+          {
+            path: "/auth/sign-up",
+            element: <SignUpPage />,
+          },
+          {
+            path: "/auth/callback",
+            element: <AuthCallback />,
+          },
+          // Auth Protected routes
+          {
+            path: "/",
+            element: <AuthProtectedRoute />,
+            children: [
+              {
+                path: "/protected",
+                element: <ProtectedPage />,
+              },
+              {
+                path: "/add-client",
+                element: <AddClient />,
+              },
+              {
+                path: "/clients/:id",
+                element: <ClientPage />,
+              },
+              {
+                path: "/tickets",
+                element: <TicketsList />,
+              },
+              {
+                path: "/tickets/new",
+                element: <AddTicket />,
+              },
+              {
+                path: "/tickets/:id",
+                element: <TicketDetail />,
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    path: "*",
+    element: <NotFoundPage />,
+  },
+]);
+
+export default router;
+]]>
+</file>
+
+<file path="packages/web-admin/src/services/ticketService.ts">
+<![CDATA[
+import supabase from "../supabase";
+
+/**
+ * Admin-facing ticket service. Admin/agent roles can see and update all tickets.
+ */
+
+export interface AdminTicket {
+  id: string;
+  ticket_type_id: number | null;
+  title: string;
+  description: string | null;
+  status: "NEW" | "OPEN" | "PENDING" | "RESOLVED" | "CLOSED";
+  priority: "LOW" | "NORMAL" | "HIGH" | "URGENT";
+  severity: "NONE" | "MINOR" | "MAJOR" | "CRITICAL" | null;
+  requester_id: string;
+  assigned_agent_id: string | null;
+  client_id: string | null;
+  tags: string[] | null;
+  custom_fields: any;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface AdminMessage {
+  id: string;
+  ticket_id: string;
+  author_id: string;
+  content: string;
+  attachments: string[] | null;
+  created_at: string | null;
+}
+
+export interface TicketType {
+  id: number;
+  name: string;
+  description: string | null;
+  workflow_metadata: any;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+/**
+ * Get all tickets (admin can see all).
+ */
+export async function getAllTickets() {
+  const { data, error } = await supabase
+    .from("tickets")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  return { data, error };
+}
+
+/**
+ * Get a single ticket by ID.
+ */
+export async function getTicketById(id: string) {
+  const { data, error } = await supabase
+    .from("tickets")
+    .select("*")
+    .eq("id", id)
+    .single();
+
+  return { data, error };
+}
+
+/**
+ * Update a ticket's status, priority, severity, or assigned agent
+ */
+export async function updateTicket(id: string, updates: Partial<AdminTicket>) {
+  const { data, error } = await supabase
+    .from("tickets")
+    .update({
+      ...updates,
+    })
+    .eq("id", id)
+    .select()
+    .single();
+
+  return { data, error };
+}
+
+/**
+ * Fetch messages for a specific ticket
+ */
+export async function getMessages(ticketId: string) {
+  const { data, error } = await supabase
+    .from("messages")
+    .select("*")
+    .eq("ticket_id", ticketId)
+    .order("created_at", { ascending: true });
+
+  return { data, error };
+}
+
+/**
+ * Create a new message (admin side).
+ */
+export async function createMessage(ticketId: string, content: string) {
+  const { data, error } = await supabase
+    .from("messages")
+    .insert({
+      ticket_id: ticketId,
+      content,
+    })
+    .select()
+    .single();
+
+  return { data, error };
+}
+
+/**
+ * Optional: fetch ticket types
+ */
+export async function getTicketTypes() {
+  const { data, error } = await supabase
+    .from("ticket_types")
+    .select("*")
+    .order("id");
+
+  return { data, error };
+}
+]]>
+</file>
+
+<file path="packages/web-admin/src/pages/tickets/TicketsListPage.tsx">
+<![CDATA[
+import { useEffect, useState } from "react";
+import { getAllTickets, AdminTicket } from "../../services/ticketService";
+import { Link } from "react-router-dom";
+import { Loader2 } from "lucide-react";
+
+const TicketsListPage = () => {
+  const [tickets, setTickets] = useState<AdminTicket[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      const { data, error } = await getAllTickets();
+      if (error) {
+        setError(error.message);
+      } else {
+        setTickets(data || []);
+      }
+      setLoading(false);
+    })();
+  }, []);
+
+  if (loading) {
+    return (
+      <main className="min-h-screen flex items-center justify-center">
+        <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+      </main>
+    );
+  }
+
+  if (error) {
+    return (
+      <main className="min-h-screen flex items-center justify-center">
+        <div className="text-red-500 text-center">
+          <p>Error: {error}</p>
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <main className="max-w-5xl mx-auto p-4">
+      <h1 className="text-2xl font-bold mb-4">All Tickets</h1>
+      {tickets.length === 0 ? (
+        <p>No tickets found.</p>
+      ) : (
+        <div className="space-y-4">
+          {tickets.map((ticket) => (
+            <div key={ticket.id} className="bg-white p-4 rounded shadow">
+              <Link
+                to={`/tickets/${ticket.id}`}
+                className="font-semibold text-blue-600"
+              >
+                {ticket.title} ({ticket.status})
+              </Link>
+              <p className="text-sm text-gray-600 mt-1">
+                Priority: {ticket.priority} | Severity: {ticket.severity}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+    </main>
+  );
+};
+
+export default TicketsListPage;
+]]>
+</file>
+
+<file path="packages/web-admin/src/pages/tickets/TicketDetailPage.tsx">
+<![CDATA[
+import { useEffect, useState } from "react";
+import {
+  getTicketById,
+  updateTicket,
+  getMessages,
+  createMessage,
+  AdminTicket,
+  AdminMessage,
+  getTicketTypes,
+  TicketType
+} from "../../services/ticketService";
+import { useParams } from "react-router-dom";
+import { Loader2 } from "lucide-react";
+
+const TicketDetailPage = () => {
+  const { id } = useParams<{ id: string }>();
+  const [ticket, setTicket] = useState<AdminTicket | null>(null);
+  const [messages, setMessages] = useState<AdminMessage[]>([]);
+  const [ticketTypes, setTicketTypes] = useState<TicketType[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [msgLoading, setMsgLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [msgError, setMsgError] = useState<string | null>(null);
+  const [newMessage, setNewMessage] = useState("");
+  const [formValues, setFormValues] = useState<Partial<AdminTicket>>({});
+
+  // Fetch ticket info
+  const loadTicketData = async (ticketId: string) => {
+    setLoading(true);
+    setError(null);
+
+    const ticketResult = await getTicketById(ticketId);
+    if (ticketResult.error) {
+      setError(ticketResult.error.message);
+      setLoading(false);
+      return;
+    }
+
+    setTicket(ticketResult.data);
+
+    // Load messages
+    const msgs = await getMessages(ticketId);
+    if (msgs.error) {
+      setError(msgs.error.message);
+    } else {
+      setMessages(msgs.data || []);
+    }
+
+    // Load ticket types
+    const { data: typesData } = await getTicketTypes();
+    setTicketTypes(typesData || []);
+
+    setFormValues({
+      status: ticketResult.data?.status,
+      priority: ticketResult.data?.priority,
+      severity: ticketResult.data?.severity,
+      assigned_agent_id: ticketResult.data?.assigned_agent_id || "",
+    });
+
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    if (id) {
+      loadTicketData(id);
+    }
+  }, [id]);
+
+  const handleUpdateTicket = async () => {
+    if (!id || !ticket) return;
+    setLoading(true);
+    setError(null);
+
+    const { data, error } = await updateTicket(id, {
+      status: formValues.status,
+      priority: formValues.priority,
+      severity: formValues.severity,
+      assigned_agent_id: formValues.assigned_agent_id
+    });
+
+    if (error) {
+      setError(error.message);
+      setLoading(false);
+      return;
+    }
+
+    // Refresh ticket data
+    await loadTicketData(id);
+    setLoading(false);
+  };
+
+  const handleSendMessage = async () => {
+    if (!id || !newMessage.trim()) return;
+    setMsgLoading(true);
+    setMsgError(null);
+
+    const { data, error } = await createMessage(id, newMessage.trim());
+    setMsgLoading(false);
+
+    if (error) {
+      setMsgError(error.message);
+      return;
+    }
+
+    if (data) {
+      // Refresh messages
+      const refreshed = await getMessages(id);
+      if (refreshed.error) {
+        setMsgError(refreshed.error.message);
+      } else {
+        setMessages(refreshed.data || []);
+        setNewMessage("");
+      }
+    }
+  };
+
+  if (loading) {
+    return (
+      <main className="min-h-screen flex items-center justify-center">
+        <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+      </main>
+    );
+  }
+
+  if (error || !ticket) {
+    return (
+      <main className="min-h-screen flex items-center justify-center">
+        <div className="text-red-500">
+          {error || "Ticket not found."}
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <main className="max-w-5xl mx-auto p-4">
+      <h1 className="text-2xl font-bold mb-2">Ticket Detail</h1>
+      <div className="bg-white shadow rounded p-4 mb-4">
+        <h2 className="text-lg font-semibold">{ticket.title}</h2>
+        <p className="text-sm text-gray-600 mt-1">Requester: {ticket.requester_id}</p>
+        <p className="text-sm text-gray-600">Client: {ticket.client_id}</p>
+        <p className="text-sm text-gray-600 mt-2 whitespace-pre-line">{ticket.description}</p>
+      </div>
+
+      <div className="bg-white shadow rounded p-4 mb-4 space-y-4">
+        <h3 className="text-lg font-semibold">Ticket Settings</h3>
+        <div className="flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-4">
+          <div>
+            <label className="block text-sm font-medium">Status</label>
+            <select
+              value={formValues.status}
+              onChange={(e) => setFormValues({ ...formValues, status: e.target.value as AdminTicket["status"] })}
+              className="border rounded p-2 w-40"
+            >
+              <option value="NEW">NEW</option>
+              <option value="OPEN">OPEN</option>
+              <option value="PENDING">PENDING</option>
+              <option value="RESOLVED">RESOLVED</option>
+              <option value="CLOSED">CLOSED</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium">Priority</label>
+            <select
+              value={formValues.priority}
+              onChange={(e) => setFormValues({ ...formValues, priority: e.target.value as AdminTicket["priority"] })}
+              className="border rounded p-2 w-40"
+            >
+              <option value="LOW">LOW</option>
+              <option value="NORMAL">NORMAL</option>
+              <option value="HIGH">HIGH</option>
+              <option value="URGENT">URGENT</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium">Severity</label>
+            <select
+              value={formValues.severity || "NONE"}
+              onChange={(e) => setFormValues({ ...formValues, severity: e.target.value as AdminTicket["severity"] })}
+              className="border rounded p-2 w-40"
+            >
+              <option value="NONE">NONE</option>
+              <option value="MINOR">MINOR</option>
+              <option value="MAJOR">MAJOR</option>
+              <option value="CRITICAL">CRITICAL</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium">Assigned Agent</label>
+            <input
+              type="text"
+              value={formValues.assigned_agent_id || ""}
+              onChange={(e) => setFormValues({ ...formValues, assigned_agent_id: e.target.value })}
+              className="border rounded p-2 w-48"
+              placeholder="Agent UUID"
+            />
+          </div>
+        </div>
+        <button
+          onClick={handleUpdateTicket}
+          className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700"
+        >
+          Update Ticket
+        </button>
+      </div>
+
+      <div className="bg-white shadow rounded p-4">
+        <h3 className="text-lg font-semibold mb-2">Messages</h3>
+        {messages.length === 0 ? (
+          <p className="text-gray-500">No messages yet.</p>
+        ) : (
+          <ul className="space-y-2 mb-4">
+            {messages.map((msg) => (
+              <li key={msg.id} className="bg-gray-50 p-2 rounded">
+                <p className="text-sm text-gray-800">{msg.content}</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  {new Date(msg.created_at ?? "").toLocaleString()}
+                </p>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {msgError && (
+          <p className="text-red-500 mb-2">{msgError}</p>
+        )}
+
+        <div className="flex space-x-2">
+          <input
+            className="border rounded flex-1 p-2"
+            placeholder="Type a message..."
+            value={newMessage}
+            onChange={(e) => setNewMessage(e.target.value)}
+          />
+          <button
+            disabled={msgLoading}
+            onClick={handleSendMessage}
+            className="inline-flex items-center px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700"
+          >
+            {msgLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+            Send
+          </button>
+        </div>
+      </div>
+    </main>
+  );
+};
+
+export default TicketDetailPage;
+]]>
+</file>
+
+<file path="packages/web-admin/src/router/index.tsx">
+<![CDATA[
+import { createBrowserRouter } from "react-router-dom";
+import HomePage from "../pages/HomePage";
+import SignInPage from "../pages/auth/SignInPage";
+import SignUpPage from "../pages/auth/SignUpPage";
+import AuthCallback from "../pages/auth/AuthCallback";
+import ProtectedPage from "../pages/ProtectedPage";
+import NotFoundPage from "../pages/404Page";
+import AuthProtectedRoute from "./AuthProtectedRoute";
+import Providers from "../Providers";
+import { AddClient } from "../pages/AddClient";
+import { ClientPage } from "../pages/ClientPage";
+import App from "../App";
+
+// Tickets
+import TicketsListPage from "../pages/tickets/TicketsListPage";
+import TicketDetailPage from "../pages/tickets/TicketDetailPage";
+
+const router = createBrowserRouter([
+  {
+    path: "/",
+    element: <Providers />,
+    children: [
+      {
+        path: "/",
+        element: <App />,
+        children: [
+          // Public routes
+          {
+            path: "/",
+            element: <HomePage />,
+          },
+          {
+            path: "/auth/sign-in",
+            element: <SignInPage />,
+          },
+          {
+            path: "/auth/sign-up",
+            element: <SignUpPage />,
+          },
+          {
+            path: "/auth/callback",
+            element: <AuthCallback />,
+          },
+          // Auth Protected routes
+          {
+            path: "/",
+            element: <AuthProtectedRoute />,
+            children: [
+              {
+                path: "/protected",
+                element: <ProtectedPage />,
+              },
+              {
+                path: "/add-client",
+                element: <AddClient />,
+              },
+              {
+                path: "/clients/:id",
+                element: <ClientPage />,
+              },
+              {
+                path: "/tickets",
+                element: <TicketsListPage />,
+              },
+              {
+                path: "/tickets/:id",
+                element: <TicketDetailPage />,
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    path: "*",
+    element: <NotFoundPage />,
+  },
+]);
+
+export default router;
+]]>
+</file>
+</response>

@@ -1,4 +1,5 @@
 const filePattern = /<file path="([^"]+)">([\s\S]*?)<\/file>/g;
+const cdataPattern = /\s*<!\[CDATA\[([\s\S]*?)\]\]>\s*/;
 
 async function parseAndWriteFiles(xmlPath: string) {
   const content = await Bun.file(xmlPath).text();
@@ -7,9 +8,14 @@ async function parseAndWriteFiles(xmlPath: string) {
   const matches = content.matchAll(filePattern);
   
   for (const match of matches) {
-    const [_, path, content] = match;
+    const [_, path, rawContent] = match;
+    
+    // Check if content is wrapped in CDATA and extract if needed
+    const cdataMatch = rawContent.match(cdataPattern);
+    const fileContent = cdataMatch ? cdataMatch[1] : rawContent;
+    
     // Remove the first empty line and trim any trailing whitespace
-    const cleanContent = content.trim();
+    const cleanContent = fileContent.trim();
     
     try {
       await Bun.write(path, cleanContent);

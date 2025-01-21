@@ -1,18 +1,22 @@
 import { createBrowserRouter } from "react-router-dom";
-import HomePage from "../pages/HomePage.tsx";
-import SignInPage from "../pages/auth/SignInPage.tsx";
-import SignUpPage from "../pages/auth/SignUpPage.tsx";
-import AuthCallback from "../pages/auth/AuthCallback.tsx";
-import ProtectedPage from "../pages/ProtectedPage.tsx";
-import NotFoundPage from "../pages/404Page.tsx";
-import AuthProtectedRoute from "./AuthProtectedRoute.tsx";
-import Providers from "../Providers.tsx";
-import { AddClient } from "../pages/AddClient.tsx";
-import { ClientPage } from "../pages/ClientPage.tsx";
-import App from "../App.tsx";
+import HomePage from "../pages/HomePage";
+import SignInPage from "../pages/auth/SignInPage";
+import SignUpPage from "../pages/auth/SignUpPage";
+import AuthCallback from "../pages/auth/AuthCallback";
+import ProtectedPage from "../pages/ProtectedPage";
+import NotFoundPage from "../pages/404Page";
+import AuthProtectedRoute from "./AuthProtectedRoute";
+import Providers from "../Providers";
+import { AddClient } from "../pages/AddClient";
+import { ClientPage } from "../pages/ClientPage";
+import App from "../App";
+
+// Ticket pages
+import TicketsList from "../pages/tickets/TicketsList";
+import AddTicket from "../pages/tickets/AddTicket";
+import TicketDetail from "../pages/tickets/TicketDetail";
 
 const router = createBrowserRouter([
-  // I recommend you reflect the routes here in the pages folder
   {
     path: "/",
     element: <Providers />,
@@ -54,6 +58,18 @@ const router = createBrowserRouter([
               {
                 path: "/clients/:id",
                 element: <ClientPage />,
+              },
+              {
+                path: "/tickets",
+                element: <TicketsList />,
+              },
+              {
+                path: "/tickets/new",
+                element: <AddTicket />,
+              },
+              {
+                path: "/tickets/:id",
+                element: <TicketDetail />,
               },
             ],
           },
