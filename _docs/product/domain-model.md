@@ -10,161 +10,166 @@ erDiagram
 
     TICKET_TYPE ||--|{ TICKET : "categorizes"
 
-    TEAM ||--|{ USER : "has members" 
-
     TICKET ||--|{ MESSAGE : "has many"
     TICKET ||--|{ AUDIT_LOG : "generates logs"
 
     CLIENT {
-        string clientId PK
-        string clientName
-        string contactInfo
+        uuid id PK
+        string name
+        jsonb contactInfo
         text notes
-        datetime createdAt
-        datetime updatedAt
+        timestamptz createdAt
+        timestamptz updatedAt
     }
 
     USER {
-        string userId PK
-        string clientId FK
-        string name
+        uuid id PK "auth.users"
+        jsonb metadata "contains role"
         string email
-        string role
-        string[] skills
-        datetime createdAt
-        datetime updatedAt
+        string[] skills "in profile"
+        timestamptz createdAt
+        timestamptz updatedAt
     }
 
     TICKET_TYPE {
-        string ticketTypeId PK
+        bigint id PK
         string name
         text description
-        json workflowMetadata
+        jsonb workflowMetadata
+        timestamptz createdAt
+        timestamptz updatedAt
     }
 
     TICKET {
-        string ticketId PK
-        string ticketTypeId FK
+        bigint id PK
+        bigint ticketTypeId FK
         string title
         text description
-        string status
-        string priority
-        string severity
-        string requesterId FK
-        string assignedAgentId FK
+        enum status "NEW|OPEN|PENDING|RESOLVED|CLOSED"
+        enum priority "LOW|NORMAL|HIGH|URGENT"
+        enum severity "NONE|MINOR|MAJOR|CRITICAL"
+        uuid requesterId FK
+        uuid assignedAgentId FK
+        uuid clientId FK
         string[] tags
-        json customFields
-        datetime createdAt
-        datetime updatedAt
+        jsonb customFields
+        timestamptz createdAt
+        timestamptz updatedAt
     }
 
     MESSAGE {
-        string messageId PK
-        string ticketId FK
-        string authorId FK
+        bigint id PK
+        bigint ticketId FK
+        uuid authorId FK
         text content
-        datetime timestamp
         string[] attachments
-    }
-
-    TEAM {
-        string teamId PK
-        string name
-        string[] members
+        timestamptz createdAt
     }
 
     AUDIT_LOG {
-        string eventId PK
+        uuid id PK
         string entityType
-        string entityId
+        uuid entityId
         text changeDescription
-        string performedBy
-        datetime timestamp
+        uuid performedBy FK
+        timestamptz createdAt
     }
 ```
 
 ## Core Entities
 
 ### Client
-
-### Client
-
-- **clientId**: Unique ID for each client org
-- **clientName**: Organization name
-- **contactInfo**, **notes**: Optional metadata
+- **id**: UUID primary key
+- **name**: Organization name
+- **contactInfo**: JSON for flexible contact details
+- **notes**: Optional metadata
 - **createdAt**, **updatedAt**: Timestamps
 
-### User
-
-- **userId**: Unique user ID
-- **clientId**: If user is from a client org, references Client; can be null for internal staff
-- **role**: Enum or string (e.g. CLIENT_CONTACT, AGENT, ADMIN, DEVELOPER)
-- **skills**: Agent skill tags (optional)
+### User (auth.users)
+- **id**: UUID primary key
+- **metadata**: JSON containing role (CLIENT_CONTACT, AGENT, ADMIN, DEVELOPER)
+- **email**: User's email
+- Additional profile data in profiles table
 
 ### TicketType
-
-- **ticketTypeId**: Unique ID for each ticket type (e.g., BUG, MAINTENANCE, CONSULTATION)
-- **workflowMetadata**: Optional JSON storing advanced or custom workflow rules
+- **id**: Auto-incrementing bigint primary key
+- **name**: Type identifier (e.g., BUG, MAINTENANCE, CONSULTATION)
+- **description**: Detailed description
+- **workflowMetadata**: JSON for custom workflow rules
+- **createdAt**, **updatedAt**: Timestamps
 
 ### Ticket
-
-- **ticketId**: Unique ticket ID
-- **ticketTypeId**: Links to TicketType for specialized workflows
+- **id**: Auto-incrementing bigint primary key
+- **ticketTypeId**: References TicketType
 - **title**, **description**: Core request details
-- **status**: (New, Open, Pending, Resolved, Closed)
-- **priority**: (Low, Normal, High, Urgent)
-- **severity**: (None, Minor, Major, Critical) typically for bug/incidents
-- **requesterId**: The user who created this ticket (likely role=CLIENT_CONTACT)
-- **assignedAgentId**: The internal user or agent assigned
-- **tags**, **customFields**: Freeform arrays or JSON for expansions
+- **status**: Enum (NEW, OPEN, PENDING, RESOLVED, CLOSED)
+- **priority**: Enum (LOW, NORMAL, HIGH, URGENT)
+- **severity**: Enum (NONE, MINOR, MAJOR, CRITICAL)
+- **requesterId**: References auth.users
+- **assignedAgentId**: References auth.users (optional)
+- **clientId**: References clients
+- **tags**, **customFields**: Array and JSON for extensibility
 - **createdAt**, **updatedAt**: Timestamps
 
 ### Message
+- **id**: Auto-incrementing bigint primary key
+- **ticketId**: References ticket
+- **authorId**: References auth.users
+- **content**: Message text
+- **attachments**: Array of attachment references
+- **createdAt**: Timestamp
 
-- **messageId**: Unique ID for each message
-- **ticketId**: References the associated Ticket
-- **authorId**: References the User or "System/AI" placeholder
-- **content**: Body text of the message
-- **timestamp**: When the message was sent
-- **attachments**: Array of file or link references
+### AuditLog
+- **id**: UUID primary key
+- **entityType**: Type of entity changed
+- **entityId**: ID of the changed entity
+- **changeDescription**: Description of the change
+- **performedBy**: References auth.users
+- **createdAt**: Timestamp
 
-### Team (Optional for MVP)
+## Access Control
 
-- **teamId**: Unique ID for a team
-- **name**: E.g., "DevOps" or "Strategy"
-- **members**: List of userIds
+### Row Level Security (RLS)
+All tables have RLS enabled with the following policies:
 
-### AuditLog (Minimal MVP)
+#### TicketTypes
+- All authenticated users can view
+- Only admins can modify
 
-- **eventId**: Unique audit ID
-- **entityType**: (Ticket, User, etc.)
-- **entityId**: The primary key of the entity changed
-- **changeDescription**: Freeform text describing the event
-- **performedBy**: Who or what performed the change
-- **timestamp**: When it occurred
+#### Tickets
+- Users can view tickets they:
+  - Created
+  - Are assigned to
+  - Have admin/agent role
+- Any authenticated user can create tickets
+- Only creators, assigned agents, or admins can update
+
+#### Messages
+- Users can view/create messages for tickets they have access to
+
+#### AuditLogs
+- Admins can view all logs
+- Users can view logs for their tickets
 
 ## Domain Operations & Workflows
 
 ### Ticket Lifecycle
-
 - createTicket(title, ticketType, priority, severity, description, requesterId)
-- assign(agentId or teamId)
+- assign(agentId)
 - changeStatus(newStatus)
 - addMessage(authorId, content, attachments)
 
-### Multi-tenant Client Support
+### Multi-tenant Support
+- Clients are isolated by RLS policies
+- Role-based access through auth.users metadata
 
-- Distinguish external users (clientId not null) vs. internal staff (null clientId)
+### TicketType Customization
+- Default types: BUG, MAINTENANCE, CONSULTATION, SUPPORT
+- Extensible through workflowMetadata
 
-### TicketType-based Customization
-
-- Bug vs. Maintenance vs. Consultation: each references a row in TicketType
-- Could store advanced routing or specialized statuses in workflowMetadata if needed
-
-### Future Hooks
-
-- AI-based auto-suggestions (via extra fields in Ticket)
-- Knowledge Base references
-- Analytics or SLA modules
+### Future Considerations
+- AI-based suggestions
+- Knowledge Base integration
+- Analytics and SLA tracking
 
 This integrated domain model allows the agency to manage different request types for various client organizations, supporting a multi-tenant structure and flexible workflows for each ticket type.
