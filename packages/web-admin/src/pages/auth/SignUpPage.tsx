@@ -100,13 +100,7 @@ const SignUpPage = () => {
 
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-4 bg-gray-50">
-      <Link 
-        to="/" 
-        className="absolute top-4 left-4 inline-flex items-center text-sm text-gray-600 hover:text-gray-900"
-      >
-        <ArrowLeft className="w-4 h-4 mr-2" />
-        Back to Home
-      </Link>
+      
 
       <Card className="w-full max-w-md">
         <CardHeader>

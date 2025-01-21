@@ -44,8 +44,8 @@ const router = createBrowserRouter([
             element: <AuthProtectedRoute />,
             children: [
               {
-                path: "/home",
-                element: <HomePage />,
+                path: "/protected",
+                element: <ProtectedPage />,
               },
               {
                 path: "/add-client",

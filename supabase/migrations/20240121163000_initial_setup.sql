@@ -145,6 +145,17 @@ create policy "system_can_create_profiles"
 -------------------------------------------------------------------------------
 drop policy if exists "admins_or_client_contact_can_create_invites" on public.invites;
 drop policy if exists "users_can_view_invites" on public.invites;
+drop policy if exists "anyone_can_check_invite_by_email" on public.invites;
+
+create policy "anyone_can_check_invite_by_email"
+    on public.invites
+    for select
+    to anon
+    using (
+      -- Only allow checking unexpired, unused invites
+      used_at is null and
+      expires_at > now()
+    );
 
 create policy "admins_or_client_contact_can_create_invites"
     on public.invites
