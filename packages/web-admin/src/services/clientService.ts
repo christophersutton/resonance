@@ -72,3 +72,16 @@ export async function createClientWithInvite(clientData: CreateClientData) {
 
   return { data: client, error: null };
 }
+
+/**
+ * Fetches all clients from Supabase.
+ * Returns clients sorted by name in ascending order.
+ */
+export async function getClients() {
+  const response = await supabase
+    .from('clients')
+    .select('*')
+    .order('name', { ascending: true });
+
+  return response;
+}
