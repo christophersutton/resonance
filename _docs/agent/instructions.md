@@ -9,6 +9,7 @@
 - One problem, one solution
 - No premature optimization
 
+
 ## ⚠️ RESTRICTED CHANGES - REQUIRE EXPLICIT APPROVAL
 
 Never modify without explicit discussion and approval:
@@ -25,17 +26,29 @@ Never modify without explicit discussion and approval:
    - Changes to module boundaries
    - Dependency injection patterns
 
-3. Major Refactors
+3. New NPM Modules
+   - Installing new modules
+
+4. Major Refactors
    - Multi-file changes
    - Interface modifications
    - Shared utility changes
    - Performance optimizations
 
+## Reference Guides
+
+When handling specific tasks, refer to these style guides:
+
+- Frontend: `_docs/agent/prompts/fe-style.md`
+- Database Migrations: `_docs/agent/prompts/db-migration.md`
+- Row Level Security: `_docs/agent/prompts/db-rls.md`
+- SQL Style: `_docs/agent/prompts/db-style.md`
+
 ## Development Approach
 
 Step-by-Step:
 
-1. Understand existing patterns
+1. Consult relevant style guides for the task
 2. Propose minimal solution
 3. Impact analysis before changes
 4. Test each testable step
@@ -66,10 +79,11 @@ Type Safety:
 
 ## When In Doubt
 
-1. Ask for clarification
-2. Provide impact analysis
-3. Start with smallest change
-4. Document assumptions
-5. Wait for approval on risky changes
+1. Check relevant style guides first
+2. Ask for clarification
+3. Provide impact analysis
+4. Start with smallest change
+5. Document assumptions
+6. Wait for approval on risky changes
 
 Remember: Stability > Cleverness
