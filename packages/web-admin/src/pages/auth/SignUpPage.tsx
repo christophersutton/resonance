@@ -9,15 +9,10 @@ import { ArrowLeft, Loader2, AlertCircle } from "lucide-react";
 import { Alert, AlertDescription } from "../../components/ui/alert";
 
 const SignUpPage = () => {
-  // ==============================
-  // If user is already logged in, redirect to home
-  // This logic is being repeated in SignIn and SignUp..
   const { session } = useSession();
   if (session) return <Navigate to="/" />;
-  // maybe we can create a wrapper component for these pages
-  // just like the ./router/AuthProtectedRoute.tsx? up to you.
-  // ==============================
   const [isLoading, setIsLoading] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [formValues, setFormValues] = useState({
     email: "",
     password: "",
@@ -30,13 +25,21 @@ const SignUpPage = () => {
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsLoading(true);
-    const { error } = await supabase.auth.signUp({
+    setSuccessMessage(null);
+
+    const { data, error } = await supabase.auth.signUp({
       email: formValues.email,
       password: formValues.password,
     });
+
     if (error) {
       alert(error.message);
+    } else if (data?.user) {
+      setSuccessMessage("Success! Please check your email to confirm your account.");
+      // Clear form
+      setFormValues({ email: "", password: "" });
     }
+    
     setIsLoading(false);
   };
 
@@ -59,18 +62,25 @@ const SignUpPage = () => {
         </CardHeader>
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
-            <Alert variant="warning" className="bg-yellow-50 text-yellow-800 border-yellow-200">
+            <Alert className="bg-yellow-50 text-yellow-800 border-yellow-200">
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
                 Demo app, please don't use your real email or password
               </AlertDescription>
             </Alert>
             
+            {successMessage && (
+              <Alert className="bg-green-50 text-green-800 border-green-200">
+                <AlertDescription>{successMessage}</AlertDescription>
+              </Alert>
+            )}
+            
             <div className="space-y-2">
               <Input
                 name="email"
                 type="email"
                 placeholder="Email"
+                value={formValues.email}
                 onChange={handleInputChange}
                 required
                 className="w-full"
@@ -81,6 +91,7 @@ const SignUpPage = () => {
                 name="password"
                 type="password"
                 placeholder="Password"
+                value={formValues.password}
                 onChange={handleInputChange}
                 required
                 className="w-full"
