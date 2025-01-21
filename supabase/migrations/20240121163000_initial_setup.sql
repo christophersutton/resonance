@@ -102,7 +102,7 @@ create policy "users_can_view_their_own_client"
     for select
     to authenticated
     using (
-      -- Admin can view all; or user’s profile has matching client_id
+      -- Admin can view all; or user's profile has matching client_id
       (auth.jwt() -> 'user_metadata' ->> 'role') = 'ADMIN'
       or
       (
@@ -152,10 +152,10 @@ create policy "admins_or_client_contact_can_create_invites"
     to authenticated
     with check (
       -- Admin can insert invites for any client
-      (auth.jwt() -> 'app_metadata' ->> 'role') = 'ADMIN'
+      (auth.jwt() -> 'user_metadata' ->> 'role') = 'ADMIN'
       -- or user is a client_contact for that client. If you prefer
-      -- to check specifically for “CLIENT_CONTACT”, do so. For now
-      -- we only check that the user’s profile belongs to the same client.
+      -- to check specifically for "CLIENT_CONTACT", do so. For now
+      -- we only check that the user's profile belongs to the same client.
       or (
         client_id in (
           select client_id from public.profiles
@@ -169,8 +169,8 @@ create policy "users_can_view_invites"
     for select
     to authenticated
     using (
-      -- Admin sees all invites, or same client_id as user’s profile
-      (auth.jwt() -> 'app_metadata' ->> 'role') = 'ADMIN'
+      -- Admin sees all invites, or same client_id as user's profile
+      (auth.jwt() -> 'user_metadata' ->> 'role') = 'ADMIN'
       or (
         client_id in (
           select client_id from public.profiles
@@ -190,8 +190,8 @@ create policy "users_can_view_audit_logs_for_their_client"
     for select
     to authenticated
     using (
-      -- Admin sees all logs. Or user’s client_id matches log’s entity_id if entity_type='clients'
-      (auth.jwt() -> 'app_metadata' ->> 'role') = 'ADMIN'
+      -- Admin sees all logs. Or user's client_id matches log's entity_id if entity_type='clients'
+      (auth.jwt() -> 'user_metadata' ->> 'role') = 'ADMIN'
       or (
         entity_id in (
           select client_id from public.profiles 
