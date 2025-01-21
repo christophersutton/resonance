@@ -1,0 +1,104 @@
+<response>
+
+  <!-- Updated file: Added route and link for "Add Client" page -->
+  <file path="apps/admin/src/App.tsx">
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import Home from './Home';
+import AddClient from './pages/Clients/AddClient';
+
+function App() {
+  return (
+    <Router>
+      <nav>
+        <Link to="/">Home</Link>
+        <Link to="/add-client">Add Client</Link>
+      </nav>
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/add-client" element={<AddClient />} />
+      </Routes>
+    </Router>
+  );
+}
+
+export default App;
+  </file>
+
+  <!-- New file: Form page to capture and submit new client data -->
+  <file path="apps/admin/src/pages/Clients/AddClient.tsx">
+import React, { useState } from 'react';
+import { createClient } from '../../services/clientService';
+
+export default function AddClient() {
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const { data, error } = await createClient({ firstName, lastName });
+    if (error) {
+      console.error('Error adding client:', error);
+    } else {
+      console.log('Client added:', data);
+      // Optionally navigate or reset form here
+    }
+  };
+
+  return (
+    <div>
+      <h1>Add Client</h1>
+      <form onSubmit={handleSubmit}>
+        <div>
+          <label>First Name</label>
+          <input
+            type="text"
+            value={firstName}
+            onChange={(e) => setFirstName(e.target.value)}
+            required
+          />
+        </div>
+        <div>
+          <label>Last Name</label>
+          <input
+            type="text"
+            value={lastName}
+            onChange={(e) => setLastName(e.target.value)}
+            required
+          />
+        </div>
+        <button type="submit">Add Client</button>
+      </form>
+    </div>
+  );
+}
+  </file>
+
+  <!-- New file: Service for interacting with Supabase to add a client -->
+  <file path="apps/admin/src/services/clientService.ts">
+import { supabase } from '../utils/supabaseClient';
+import { Client } from 'packages/shared/types/client';
+
+/**
+ * Creates a new client in Supabase.
+ * @param clientData - Client data except the 'id'.
+ */
+export async function createClient(clientData: Omit<Client, 'id'>) {
+  const response = await supabase
+    .from('clients')
+    .insert(clientData);
+
+  return response;
+}
+  </file>
+
+  <!-- Existing or new file: Shared type definition for Client -->
+  <file path="packages/shared/types/client.ts">
+export interface Client {
+  id: string;
+  firstName: string;
+  lastName: string;
+}
+  </file>
+
+</response>

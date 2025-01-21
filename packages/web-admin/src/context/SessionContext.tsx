@@ -3,10 +3,18 @@ import supabase from "../supabase";
 import LoadingPage from "../pages/LoadingPage";
 import type { User, Session } from "@supabase/supabase-js";
 
-const SessionContext = createContext<{
+type Role = 'ADMIN' | 'CLIENT_CONTACT' | 'AGENT' | 'DEVELOPER';
+
+interface SessionContextType {
   session: Session | null;
-}>({
+  role: Role | null;
+  isAdmin: boolean;
+}
+
+const SessionContext = createContext<SessionContextType>({
   session: null,
+  role: null,
+  isAdmin: false,
 });
 
 export const useSession = () => {
@@ -20,12 +28,16 @@ export const useSession = () => {
 type Props = { children: React.ReactNode };
 export const SessionProvider = ({ children }: Props) => {
   const [session, setSession] = useState<Session | null>(null);
+  const [role, setRole] = useState<Role | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const authStateListener = supabase.auth.onAuthStateChange(
       async (_event: string, session: Session | null) => {
         setSession(session);
+        // Get role from session metadata
+        const userRole = session?.user?.app_metadata?.role as Role;
+        setRole(userRole);
         setIsLoading(false);
       }
     );
@@ -36,7 +48,11 @@ export const SessionProvider = ({ children }: Props) => {
   }, []);
 
   return (
-    <SessionContext.Provider value={{ session }}>
+    <SessionContext.Provider value={{ 
+      session, 
+      role,
+      isAdmin: role === 'ADMIN'
+    }}>
       {isLoading ? <LoadingPage /> : children}
     </SessionContext.Provider>
   );

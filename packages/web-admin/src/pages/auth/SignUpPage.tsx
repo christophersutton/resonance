@@ -54,30 +54,45 @@ const SignUpPage = () => {
         throw new Error("Failed to create user account");
       }
 
-      // 2. Create the admin profile using service role client
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .insert({
-          id: authData.user.id,
-          full_name: formValues.fullName,
-          role: 'ADMIN'
-        })
-        .select()
-        .single();
+      // 2. Sign in the user immediately after signup
+      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+        email: formValues.email,
+        password: formValues.password,
+      });
 
-      if (profileError) {
-        // If profile creation fails, we should clean up the auth user
-        await supabase.auth.signOut();
-        throw new Error("Failed to create admin profile. Please try again.");
+      if (signInError) {
+        throw signInError;
+      }
+
+      // 3. Create the admin profile after successful sign in
+      if (signInData.session) {
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .insert({
+            id: authData.user.id,
+            full_name: formValues.fullName,
+            role: 'ADMIN'
+          })
+          .select()
+          .single();
+
+        if (profileError) {
+          console.error('Profile creation error:', profileError);
+          // Don't throw here - we want the user to still be signed in
+          setError("Note: There was an issue creating your profile. Please contact support.");
+          return;
+        }
       }
 
       setSuccessMessage(
-        "Success! Please check your email to confirm your account. You will be able to sign in after confirmation."
+        "Success! Please check your email to confirm your account. You can continue using the app with limited access until email verification."
       );
       setFormValues({ email: "", password: "", fullName: "" });
       
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred during signup");
+      // Clean up if we fail
+      await supabase.auth.signOut();
     } finally {
       setIsLoading(false);
     }

@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import supabase from "../supabase";
 import { useSession } from "../context/SessionContext";
 
-const HomePage = () => {
+export const HomePage = () => {
   const { session } = useSession();
   return (
     <main className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
@@ -13,7 +13,7 @@ const HomePage = () => {
           <p className="text-gray-600 text-center">
             Current User: <span className="font-medium">{session?.user.email || "None"}</span>
           </p>
-          
+          <Link to="/add-client">Add Client</Link>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             {session ? (
               <button
