@@ -6,10 +6,18 @@ import path from 'path';
 export default defineConfig({
   plugins: [react()],
   root: '.',
-  base: '',
+  base: '/',
   build: {
     outDir: 'dist',
-    sourcemap: true
+    sourcemap: true,
+    assetsDir: 'assets',
+    rollupOptions: {
+      output: {
+        assetFileNames: 'assets/[name].[hash][extname]',
+        chunkFileNames: 'assets/[name].[hash].js',
+        entryFileNames: 'assets/[name].[hash].js',
+      },
+    },
   },
   resolve: {
     alias: {

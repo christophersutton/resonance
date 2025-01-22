@@ -79,7 +79,15 @@ const TicketDetailPage = () => {
     });
 
     if (error) {
-      setError(error.message);
+      console.error('Error updating ticket:', error);
+      // Handle different error cases
+      if (error.message.includes("Ticket not found")) {
+        setError("This ticket no longer exists or you don't have permission to update it.");
+      } else if (error.message.includes("failed to fetch updated ticket")) {
+        setError("Update may have succeeded but we couldn't confirm the changes. Please refresh the page.");
+      } else {
+        setError(error.message);
+      }
       setLoading(false);
       return;
     }

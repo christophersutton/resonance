@@ -68,16 +68,56 @@ export async function getTicketById(id: string) {
  * Update a ticket's status, priority, severity, or assigned agent
  */
 export async function updateTicket(id: string, updates: Partial<AdminTicket>) {
-  const { data, error } = await supabase
+  // First verify the ticket exists and is accessible
+  const { data: existingTicket, error: fetchError } = await supabase
+    .from("tickets")
+    .select("*")
+    .eq("id", id)
+    .single();
+
+  console.log('Existing ticket:', existingTicket);
+  console.log('Fetch error:', fetchError);
+
+  if (fetchError) {
+    return { data: null, error: fetchError };
+  }
+
+  if (!existingTicket) {
+    return {
+      data: null,
+      error: new Error("Ticket not found or you don't have permission to update it")
+    };
+  }
+
+  // Proceed with update - don't use select() to avoid PGRST116
+  const { error: updateError, data: updateData } = await supabase
     .from("tickets")
     .update({
       ...updates,
+      updated_at: new Date().toISOString()
     })
+    .eq("id", id);
+
+  if (updateError) {
+    return { data: null, error: updateError };
+  }
+
+  console.log('Update data:', updateData);
+  // Fetch the updated ticket
+  const { data: updatedTicket, error: refetchError } = await supabase
+    .from("tickets")
+    .select("*")
     .eq("id", id)
-    .select()
     .single();
 
-  return { data, error };
+  if (refetchError) {
+    return { 
+      data: null, 
+      error: new Error("Update succeeded but failed to fetch updated ticket")
+    };
+  }
+
+  return { data: updatedTicket, error: null };
 }
 
 /**
