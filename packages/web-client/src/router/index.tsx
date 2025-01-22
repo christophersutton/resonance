@@ -27,10 +27,6 @@ const router = createBrowserRouter([
         children: [
           // Public routes
           {
-            path: "/",
-            element: <HomePage />,
-          },
-          {
             path: "/auth/sign-in",
             element: <SignInPage />,
           },
@@ -47,6 +43,10 @@ const router = createBrowserRouter([
             path: "/",
             element: <AuthProtectedRoute />,
             children: [
+              {
+                path: "/",
+                element: <HomePage />,
+              },
               {
                 path: "/protected",
                 element: <ProtectedPage />,
