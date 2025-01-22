@@ -1,15 +1,17 @@
 import { createBrowserRouter } from "react-router-dom";
-import HomePage from "../pages/HomePage";
 import SignInPage from "../pages/auth/SignInPage";
 import SignUpPage from "../pages/auth/SignUpPage";
 import AuthCallback from "../pages/auth/AuthCallback";
-import ProtectedPage from "../pages/ProtectedPage";
 import NotFoundPage from "../pages/404Page";
 import AuthProtectedRoute from "./AuthProtectedRoute";
 import Providers from "../Providers";
 import { AddClient } from "../pages/AddClient";
 import { ClientPage } from "../pages/ClientPage";
 import App from "../App";
+import DashboardLayout from "../layouts/DashboardLayout";
+import DashboardPage from "../pages/DashboardPage";
+import ClientsPage from "../pages/ClientsPage";
+import { ClientProvider } from "../context/ClientContext";
 
 // Tickets
 import TicketsListPage from "../pages/tickets/TicketsListPage";
@@ -43,28 +45,41 @@ const router = createBrowserRouter([
             element: <AuthProtectedRoute />,
             children: [
               {
-                path: "/",
-                element: <HomePage />,
-              },
-              {
-                path: "/protected",
-                element: <ProtectedPage />,
-              },
-              {
-                path: "/add-client",
-                element: <AddClient />,
-              },
-              {
-                path: "/clients/:id",
-                element: <ClientPage />,
-              },
-              {
-                path: "/tickets",
-                element: <TicketsListPage />,
-              },
-              {
-                path: "/tickets/:id",
-                element: <TicketDetailPage />,
+                element: (
+                  <ClientProvider>
+                    <DashboardLayout />
+                  </ClientProvider>
+                ),
+                children: [
+                  {
+                    path: "/",
+                    element: <DashboardPage />,
+                  },
+                  {
+                    path: "/dashboard",
+                    element: <DashboardPage />,
+                  },
+                  {
+                    path: "/clients",
+                    element: <ClientsPage />,
+                  },
+                  {
+                    path: "/add-client",
+                    element: <AddClient />,
+                  },
+                  {
+                    path: "/clients/:id",
+                    element: <ClientPage />,
+                  },
+                  {
+                    path: "/tickets",
+                    element: <TicketsListPage />,
+                  },
+                  {
+                    path: "/tickets/:id",
+                    element: <TicketDetailPage />,
+                  },
+                ],
               },
             ],
           },
